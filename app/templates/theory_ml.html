@@ -1,47 +1,177 @@
 <!DOCTYPE html>
-<html>
+<html lang="th">
 
 <head>
+    <meta charset="UTF-8">
+    <title>Machine Learning</title>
 
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Kanit', sans-serif;
+            background: #f5f7fb;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe, #00f2fe);
+            color: white;
+            padding: 40px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+
+        .card-custom {
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            margin-bottom: 25px;
+        }
+
+        .box {
+            max-height: 350px;
+            overflow-y: auto;
+            background: #fafafa;
+            padding: 10px;
+            border-radius: 10px;
+        }
+
+        h4 {
+            border-left: 5px solid #4facfe;
+            padding-left: 10px;
+            margin-bottom: 15px;
+        }
+
+        .btn-custom {
+            background: linear-gradient(135deg, #4facfe, #00c6ff);
+            border: none;
+            padding: 12px 25px;
+            font-size: 18px;
+            border-radius: 10px;
+        }
+    </style>
 </head>
 
-<body>
-    <h1>Machine Learning</h1>
-    <h2>การเรียนรู้ของเครื่อง</h2>
-    <h3>ข้อมูลเบื้องต้น</h3>
-    <p>
-        อ้างอิงจาก Adreas Muller and Guido ,2016 <br>
-        การเรียนรู้ของเครื่อง(Machine Learning:ML) คือ การทำให้คอมพิวเตอร์สามารถเรียนรู้แบบ(Pattern Recognition)
-        ของข้อมูลในอดีต(History Data)
-        เพื่อทำการสร้างแบบจำลอง (Model) ทางคณิตศาสตร์หรือสถิติการพยากรณ์ (Forecast) หรือทำนาย (Prediction)
-        จากข้อมูลในอดีตโดยอัตโนมัติ
-    </p>
-    <br>
-    <h3>แนวทางการพัฒนา</h3>
-    <h4>1.การเตรียมข้อมูล</h4>
-    <h5>ข้อมูลที่ใช้</h5>
-    <div style="max-height: 400px; overflow-y: auto; border: 1px solid #ccc; padding: 10px;">
-    <!-- ตารางข้อมูล -->
-     {% if table_html_before %}
-    <h3>ตารางข้อมูลความเหลื่อมล้ำทางเศรษฐกิจและความยากจนทั่วโลกในปี ค.ศ. 1980-2024</h3>
-    {{ table_html_before | safe }}
-{% endif %}
-</div>
-    <p>ชุดข้อมูลนี้รวบรวมข้อมูลตัวชี้วัดทางเศรษฐกิจระดับโลกที่เกี่ยวข้องกับความเหลื่อมล้ำทางรายได้ ความยากจน และการพัฒนาเศรษฐกิจของประเทศต่างๆ ทั่วโลก ตั้งแต่ปี 1980 ถึง 2024 ข้อมูลดังกล่าวมีที่มาจาก Kaggle.com ที่เผยแพร่โดย
-        <a
-            href="https://www.kaggle.com/datasets/lucalullo/global-economic-inequality-and-poverty-1980-2024/data">
-             Luca Lullo </a>
-        นักวเคราะห์ข้อมูลอิสระ
-    </p>
-    <h4>2.จัดการข้อมูล</h4>
-    <p>
-        จากข้อมูลที่เห็นจะพบว่ามีค่าว่าง(NULL)อยู่จำนวนมาก ทำให้ชุดข้อมูลที่มีอยู่ใช้ในทันที ดังนั้นจัดการให้อยู่ในรูปที่เหมาะสม
-    </p>
-    <ol>
-        <li>
-            สำรวจข้อมูล
-        </li>
-    </ol>
+<body class="container">
+
+    <!-- HEADER -->
+    <div class="header text-center">
+        <h1>📊 Machine Learning</h1>
+        <p class="mb-0">การวิเคราะห์ความเหลื่อมล้ำทางเศรษฐกิจด้วย AI</p>
+    </div>
+
+    <!-- INTRO -->
+    <div class="card card-custom p-4">
+        <h4>📌 ข้อมูลเบื้องต้น</h4>
+        <p>
+            Machine Learning คือกระบวนการที่ทำให้คอมพิวเตอร์สามารถเรียนรู้จากข้อมูลในอดีต
+            เพื่อสร้างโมเดลสำหรับการพยากรณ์ในอนาคต
+        </p>
+    </div>
+
+    <!-- DATA -->
+    <div class="card card-custom p-4">
+        <h4>📂 การเตรียมข้อมูล</h4>
+
+        {% if table_html_before %}
+        <h6>Dataset ก่อนทำความสะอาด</h6>
+        <div class="box">
+            {{ table_html_before | safe }}
+        </div>
+        {% endif %}
+
+        <p class="mt-3">
+            Dataset นี้ประกอบด้วยข้อมูลเศรษฐกิจโลก เช่น GDP, Gini Index และ Poverty Rate
+        </p>
+    </div>
+
+    <!-- CLEANING -->
+    <div class="card card-custom p-4">
+        <h4>🧹 การจัดการข้อมูล</h4>
+
+        {% if summary_info %}
+        <ul>
+            <li><b>Rows:</b> {{ summary_info.rows }}</li>
+            <li><b>Columns:</b> {{ summary_info.columns }}</li>
+            <li><b>Total Values:</b> {{ summary_info.total_values }}</li>
+        </ul>
+        {% endif %}
+
+        {% if table_html_null %}
+        <h6>Missing Values</h6>
+        {{ table_html_null | safe }}
+        {% endif %}
+
+        <p>
+            ทำการลบ Missing Values และแปลงข้อมูลให้เหมาะสมต่อการ Train Model
+        </p>
+
+        {% if table_html_after %}
+        <h6>Dataset หลัง Clean</h6>
+        <div class="box">
+            {{ table_html_after | safe }}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- MODEL -->
+    <div class="card card-custom p-4">
+        <h4>🤖 โมเดลที่ใช้</h4>
+
+        <div class="row">
+            <div class="col-md-4">
+                <div class="p-3 bg-light rounded">
+                    <h6>Logistic Regression</h6>
+                    <p>ใช้สำหรับ Classification และเป็น baseline model</p>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="p-3 bg-light rounded">
+                    <h6>Decision Tree</h6>
+                    <p>จับความสัมพันธ์แบบ non-linear</p>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="p-3 bg-light rounded">
+                    <h6>Random Forest</h6>
+                    <p>ลด Overfitting และเพิ่มความแม่นยำ</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-3">
+            <h6>✨ Ensemble Learning</h6>
+            <p>รวมผลลัพธ์จากหลายโมเดลเพื่อเพิ่ม Accuracy</p>
+        </div>
+    </div>
+
+    <!-- DEV -->
+    <div class="card card-custom p-4">
+        <h4>⚙️ การพัฒนาโมเดล</h4>
+        <p>
+            Train โมเดลด้วยข้อมูลที่ผ่านการ Clean แล้ว และประเมินด้วย Accuracy, Precision, Recall และ ROC-AUC
+        </p>
+    </div>
+
+    <!-- USE -->
+    <div class="card card-custom p-4">
+        <h4>🚀 การนำไปใช้งาน</h4>
+        <p>
+            ใช้สำหรับวิเคราะห์แนวโน้มความเหลื่อมล้ำ และช่วยในการตัดสินใจเชิงนโยบาย
+        </p>
+    </div>
+
+    <!-- BUTTON -->
+    <div class="text-center mt-4 mb-5">
+        <a href="/ml/model/" class="btn btn-custom text-white">
+            🚀 ไปหน้าโมเดล
+        </a>
+    </div>
 
 </body>
 

@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <title>ML Dashboard</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        body {
+            background: #eef2f7;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4e73df, #1cc88a);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            border-radius: 15px;
+            border: none;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            transition: 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .metric {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .left-title { color: #4e73df; }
+        .right-title { color: #1cc88a; }
+
+        .btn-custom {
+            background: linear-gradient(135deg, #1cc88a, #36b9cc);
+            color: white;
+        }
+
+        .result-box {
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        img {
+            border-radius: 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container mt-4">
+
+    <div class="header">
+        <h1>📊 Machine Learning Dashboard</h1>
+        <p>Model Performance & Prediction System</p>
+    </div>
+
+    <div class="row">
+
+        <!-- LEFT -->
+        <div class="col-md-6">
+
+            <div class="card p-3 mb-3">
+                <h4 class="left-title">📌 Training Result</h4>
+                <hr>
+                <div class="row text-center">
+                    <div class="col text-success">TP<br><span class="metric">{{ tp }}</span></div>
+                    <div class="col text-primary">TN<br><span class="metric">{{ tn }}</span></div>
+                    <div class="col text-danger">FP<br><span class="metric">{{ fp }}</span></div>
+                    <div class="col text-warning">FN<br><span class="metric">{{ fn }}</span></div>
+                </div>
+            </div>
+
+            <div class="card p-3 mb-3">
+                <h5 class="left-title">📊 Metrics</h5>
+                <div class="row text-center">
+                    <div class="col">Accuracy<br><b>{{ accuracy }}</b></div>
+                    <div class="col">Precision<br><b>{{ precision }}</b></div>
+                    <div class="col">Recall<br><b>{{ recall }}</b></div>
+                    <div class="col">F1<br><b>{{ f1 }}</b></div>
+                </div>
+                <div class="text-center mt-2">
+                    <b>AUC: {{ auc }}</b>
+                </div>
+            </div>
+
+            <div class="card p-3 mb-3 text-center">
+                <h5 class="left-title">Cross Validation</h5>
+                <p>Mean: <b>{{ cv_mean }}</b></p>
+                <p>Std: <b>{{ cv_std }}</b></p>
+            </div>
+
+            <div class="card p-3 mb-3">
+                <h5 class="left-title">ROC Curve</h5>
+                <img src="data:image/png;base64,{{ roc }}">
+            </div>
+
+            <div class="card p-3 mb-3">
+                <h5 class="left-title">Heatmap</h5>
+                <img src="data:image/png;base64,{{ heatmap }}">
+            </div>
+
+            <div class="card p-3">
+                <h5 class="left-title">Model Comparison</h5>
+                <ul class="list-group">
+                    {% for name, score in model_results %}
+                    <li class="list-group-item d-flex justify-content-between">
+                        {{ name }}
+                        <span class="badge bg-primary">{{ score }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+        </div>
+
+        <!-- RIGHT -->
+        <div class="col-md-6">
+
+            <!-- PREDICT -->
+            <div class="card p-3 mb-3">
+                <h4 class="right-title">🧪 Prediction</h4>
+                <hr>
+
+                <!-- THRESHOLD -->
+                <div class="alert alert-info text-center">
+                    📏 Threshold (Median): <b>{{ threshold }}</b>
+                </div>
+
+                <form action="/ml/predict" method="post">
+
+                    <input type="number" step="any" name="population" class="form-control mb-2" placeholder="Population" required>
+                    <input type="number" step="any" name="gdp" class="form-control mb-2" placeholder="GDP" required>
+                    <input type="number" step="any" name="gdp_per_capita" class="form-control mb-2" placeholder="GDP per Capita" required>
+                    <input type="number" step="any" name="income_top1" class="form-control mb-2" placeholder="Income Top1" required>
+                    <input type="number" step="any" name="income_bottom50" class="form-control mb-2" placeholder="Income Bottom50" required>
+                    <input type="number" step="1" name="year_class" class="form-control mb-2" placeholder="Year Class" required>
+
+                    <button type="submit" class="btn btn-custom w-100 mt-2">
+                        🔮 Predict
+                    </button>
+                </form>
+
+                {% if user_pred is defined %}
+                <hr>
+
+                <div class="text-center result-box
+                    {% if user_pred == 'High Inequality' %} text-danger {% else %} text-success {% endif %}">
+                    {{ user_pred }}
+                </div>
+
+                <div class="text-center mt-2">
+                    Confidence: <b>{{ probability }}%</b>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- EXPLANATION -->
+            <div class="card p-3">
+                <h5 class="right-title">📖 Explanation</h5>
+
+                <p>
+                    โมเดลนี้ใช้ Classification เพื่อทำนายว่า
+                    <b>income_top10 สูงหรือต่ำ</b>
+                </p>
+
+                <ul>
+                    <li><b>Positive (High Inequality)</b> → ค่า income_top10 มากกว่า Threshold</li>
+                    <li><b>Negative (Low Inequality)</b> → ค่า income_top10 น้อยกว่าหรือเท่ากับ Threshold</li>
+                </ul>
+
+                <p>
+                    <b>Threshold (Median)</b> คือค่ากลางของข้อมูลที่ใช้เป็นเส้นแบ่ง
+                </p>
+
+                <hr>
+
+                <ul>
+                    <li>Accuracy → ความแม่นยำรวม</li>
+                    <li>Precision → ทำนายถูกเมื่อบอกว่าสูง</li>
+                    <li>Recall → ตรวจจับเคสสูงได้ครบ</li>
+                    <li>F1 → สมดุล</li>
+                </ul>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+</html>
