@@ -15,22 +15,26 @@
         }
 
         .btn-custom {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
             padding: 15px 30px;
             margin: 15px;
             font-size: 18px;
             border: none;
             border-radius: 10px;
+            color: white;
             text-decoration: none;
+            display: inline-block;
         }
 
-        .btn-custom-ml {
+        .btn-ml {
             background: linear-gradient(135deg, #4facfe, #00f2fe);
         }
 
-        .btn-custom-dl {
+        .btn-dl {
             background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+
+        .btn-model {
+            background: linear-gradient(135deg, #f7971e, #ffd200);
         }
 
         .footer {
@@ -46,13 +50,14 @@
     <p>เลือกประเภทโมเดลที่ต้องการศึกษา</p>
 
     <div>
-        <a href="/theory_ml" class="btn btn-custom btn-custom-ml">📊 Machine Learning</a>
-        <a href="/theory_dl" class="btn btn-custom btn-custom-dl">🧠 Deep Learning</a>
+        <a href="/theory_ml" class="btn btn-custom btn-ml">📊 Machine Learning Theory</a>
+        <a href="/theory_dl" class="btn btn-custom btn-dl">🧠 Deep Learning Theory</a>
     </div>
 
-    {% if result %}
-    <h2 class="mt-4">{{ result }}</h2>
-    {% endif %}
+    <div>
+        <a href="/ml/model/" class="btn btn-custom btn-model">🚀 ไปหน้า ML Model</a>
+        <a href="/dl/model/" class="btn btn-custom btn-model">🚀 ไปหน้า DL Model</a>
+    </div>
 
     <div class="footer">
         ผู้จัดทำ: อัคคเดช กู้อัจฉริยกุล | รหัสนักศึกษา: 6704062610208
