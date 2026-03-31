@@ -1,116 +1,77 @@
 from fastapi import APIRouter, Request, Form
 from fastapi.templating import Jinja2Templates
 import os
-
 import pandas as pd
+import numpy as np
+import io, base64
 import matplotlib.pyplot as plt
 import seaborn as sns
-import io
-import base64
 
-from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import (
-    confusion_matrix, accuracy_score,
-    precision_score, recall_score, f1_score,
-    roc_auc_score, roc_curve
-)
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, roc_curve
+from sklearn.neural_network import MLPClassifier
 
-from sklearn.linear_model import LogisticRegression
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import RandomForestClassifier, VotingClassifier
+router = APIRouter(prefix="/dl", tags=["Deep Learning"])
 
-router = APIRouter(prefix="/ml", tags=["Machine Learning"])
-
+# ================= PATHS =================
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
-# ================= GLOBAL =================
+# ================= GLOBALS =================
 df_clean = None
-ensemble = None
-le_iso = None
+model = None
+scaler = None
+label_encoders = {}
 X_columns = None
+metrics_data = {}
 
-threshold_value = 0
-
-tp = tn = fp = fn = 0
-accuracy = precision = recall = f1 = auc = 0
-heatmap_base64 = roc_base64 = ""
-model_results = []
-cv_mean = cv_std = 0
+roc_base64 = ""
+heatmap_base64 = ""
 
 # ================= INIT MODEL =================
 def init_model():
-    global df_clean, ensemble, le_iso, X_columns
-    global tp, tn, fp, fn
-    global accuracy, precision, recall, f1, auc
-    global heatmap_base64, roc_base64
-    global model_results, cv_mean, cv_std
-    global threshold_value
+    global df_clean, model, scaler, label_encoders, X_columns
+    global metrics_data, roc_base64, heatmap_base64
 
-    path = os.path.join(BASE_DIR, "data", "dataset1.csv")
-    df = pd.read_csv(path)
+    path = os.path.join(BASE_DIR, "data", "dataset2.csv")
+    df = pd.read_csv(path).dropna()
 
-    # ----- CLEAN -----
     df_clean = df.copy()
-    df_clean = df_clean.drop(columns=["poverty_rate", "gini_index", "country"], errors="ignore")
 
-    cols = ["gdp", "gdp_per_capita", "income_top1", "income_top10", "income_bottom50"]
-    df_clean = df_clean.dropna(subset=cols)
+    categorical_cols = ["job_title", "education_level", "industry", "company_size", "location", "remote_work"]
+    for col in categorical_cols:
+        le = LabelEncoder()
+        df_clean[col] = le.fit_transform(df_clean[col])
+        label_encoders[col] = le
 
-    df_clean["year_class"] = df_clean["year"] - df_clean["year"].min()
-    df_clean = df_clean.drop(columns=["year"], errors="ignore")
+    df_clean["salary_class"] = (df_clean["salary"] > df_clean["salary"].median()).astype(int)
 
-    le_iso = LabelEncoder()
-    df_clean["iso_code"] = le_iso.fit_transform(df_clean["iso_code"].astype(str))
+    X = df_clean.drop(columns=["salary", "salary_class"])
+    y = df_clean["salary_class"]
 
-    # ----- HEATMAP -----
-    corr = df_clean.corr()
-    plt.figure(figsize=(10,8))
-    sns.heatmap(corr, annot=True, cmap="coolwarm", fmt=".2f")
-    buf = io.BytesIO()
-    plt.savefig(buf, format="png")
-    plt.close()
-    buf.seek(0)
-    heatmap_base64 = base64.b64encode(buf.read()).decode()
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
 
-    # ----- TARGET -----
-    threshold_value = df_clean["income_top10"].median()
-    df_clean["target"] = (df_clean["income_top10"] > threshold_value).astype(int)
+    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+    X_columns = X_train.shape[1]
 
-    X = df_clean.drop(columns=["income_top10","target"])
-    y = df_clean["target"]
+    model = MLPClassifier(hidden_layer_sizes=(32,16), max_iter=1000, random_state=42)
+    model.fit(X_train, y_train)
 
-    X_train, X_test, y_train, y_test = train_test_split(X,y,test_size=0.2,random_state=42)
+    # ===== METRICS =====
+    y_pred_prob = model.predict_proba(X_test)[:,1]
+    y_pred = (y_pred_prob > 0.5).astype(int)
 
-    X_columns = X_train.columns.tolist()
-
-    # ----- MODELS -----
-    m1 = LogisticRegression(max_iter=1000)
-    m2 = DecisionTreeClassifier()
-    m3 = RandomForestClassifier()
-
-    ensemble = VotingClassifier(
-        estimators=[("lr",m1),("dt",m2),("rf",m3)],
-        voting="soft"
-    )
-
-    ensemble.fit(X_train,y_train)
-
-    # ----- METRICS -----
-    y_pred = ensemble.predict(X_test)
     tn, fp, fn, tp = confusion_matrix(y_test,y_pred).ravel()
-
     accuracy = accuracy_score(y_test,y_pred)
-    precision = precision_score(y_test,y_pred,zero_division=0)
-    recall = recall_score(y_test,y_pred,zero_division=0)
-    f1 = f1_score(y_test,y_pred,zero_division=0)
+    precision = precision_score(y_test,y_pred)
+    recall = recall_score(y_test,y_pred)
+    f1 = f1_score(y_test,y_pred)
+    auc = roc_auc_score(y_test,y_pred_prob)
 
-    # ----- ROC -----
-    y_prob = ensemble.predict_proba(X_test)[:,1]
-    auc = roc_auc_score(y_test,y_prob)
-
-    fpr, tpr, _ = roc_curve(y_test,y_prob)
+    # ===== ROC PLOT =====
+    fpr, tpr, _ = roc_curve(y_test,y_pred_prob)
     plt.figure()
     plt.plot(fpr,tpr,label=f"AUC={auc:.4f}")
     plt.plot([0,1],[0,1],"--")
@@ -119,83 +80,79 @@ def init_model():
     plt.savefig(buf, format="png")
     plt.close()
     buf.seek(0)
+    global roc_base64
     roc_base64 = base64.b64encode(buf.read()).decode()
 
-    # ----- CV -----
-    cv = cross_val_score(ensemble,X,y,cv=5)
-    cv_mean = cv.mean()
-    cv_std = cv.std()
+    # ===== HEATMAP =====
+    cm = confusion_matrix(y_test,y_pred)
+    plt.figure(figsize=(5,4))
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+    plt.title("Confusion Matrix")
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png")
+    plt.close()
+    buf.seek(0)
+    global heatmap_base64
+    heatmap_base64 = base64.b64encode(buf.read()).decode()
 
-    # ----- MODEL COMPARE -----
-    model_results.clear()
-    for name, model in {
-        "Logistic": m1,
-        "Decision Tree": m2,
-        "Random Forest": m3
-    }.items():
-        model.fit(X_train,y_train)
-        acc = accuracy_score(y_test, model.predict(X_test))
-        model_results.append((name, round(acc,4)))
+    metrics_data.update({
+        "tp": int(tp), "tn": int(tn), "fp": int(fp), "fn": int(fn),
+        "accuracy": round(accuracy,4), "precision": round(precision,4),
+        "recall": round(recall,4), "f1": round(f1,4), "auc": round(auc,4)
+    })
 
 init_model()
 
 # ================= ROUTES =================
 @router.get("/model")
 def model_page(request: Request):
-    return templates.TemplateResponse(request,"model_ml.html",{
-        "tp":tp,"tn":tn,"fp":fp,"fn":fn,
-        "accuracy":round(accuracy,4),
-        "precision":round(precision,4),
-        "recall":round(recall,4),
-        "f1":round(f1,4),
-        "auc":round(auc,4),
-        "heatmap":heatmap_base64,
-        "roc":roc_base64,
-        "model_results":model_results,
-        "cv_mean":round(cv_mean,4),
-        "cv_std":round(cv_std,4),
-        "threshold":round(threshold_value,2)
-    })
+    return templates.TemplateResponse(
+        request, "model_dl.html",
+        {
+            **metrics_data,
+            "roc": roc_base64,
+            "heatmap": heatmap_base64
+        }
+    )
 
 @router.post("/predict")
 def predict_user(
     request: Request,
-    population: float = Form(...),
-    gdp: float = Form(...),
-    gdp_per_capita: float = Form(...),
-    income_top1: float = Form(...),
-    income_bottom50: float = Form(...),
-    year_class: int = Form(...)
+    job_title: str = Form(...),
+    experience_years: float = Form(...),
+    education_level: str = Form(...),
+    skills_count: int = Form(...),
+    industry: str = Form(...),
+    company_size: str = Form(...),
+    location: str = Form(...),
+    remote_work: str = Form(...),
+    certifications: int = Form(...)
 ):
-    df_input = pd.DataFrame([{
-        "population":population,
-        "gdp":gdp,
-        "gdp_per_capita":gdp_per_capita,
-        "income_top1":income_top1,
-        "income_bottom50":income_bottom50,
-        "year_class":year_class,
-        "iso_code":0
-    }])
+    try:
+        raw_data = [job_title, experience_years, education_level,
+                    skills_count, industry, company_size,
+                    location, remote_work, certifications]
 
-    df_input = df_input[X_columns]
+        cat_indices = [0,2,4,5,6,7]
+        cat_names = ["job_title","education_level","industry","company_size","location","remote_work"]
+        for idx, col_name in zip(cat_indices, cat_names):
+            raw_data[idx] = label_encoders[col_name].transform([raw_data[idx]])[0]
 
-    pred = ensemble.predict(df_input)[0]
-    proba = ensemble.predict_proba(df_input)[0][1]
+        data_scaled = scaler.transform([raw_data])
+        pred_prob = model.predict_proba(data_scaled)[0][1]
+        pred_label = "💰 High Salary" if pred_prob > 0.5 else "📉 Low Salary"
+        user_pred = f"{pred_label} ({round(pred_prob*100,2)}%)"
 
-    return templates.TemplateResponse(request,"model_ml.html",{
-        
-        "tp":tp,"tn":tn,"fp":fp,"fn":fn,
-        "accuracy":round(accuracy,4),
-        "precision":round(precision,4),
-        "recall":round(recall,4),
-        "f1":round(f1,4),
-        "auc":round(auc,4),
-        "heatmap":heatmap_base64,
-        "roc":roc_base64,
-        "model_results":model_results,
-        "cv_mean":round(cv_mean,4),
-        "cv_std":round(cv_std,4),
-        "threshold":round(threshold_value,2),
-        "user_pred": "High Inequality" if pred==1 else "Low Inequality",
-        "probability": round(proba*100,2)
-    })
+    except Exception as e:
+        print(f"Prediction Error: {e}")
+        user_pred = "❌ Prediction Error"
+
+    return templates.TemplateResponse(
+        request, "model_dl.html",
+        {
+            **metrics_data,
+            "roc": roc_base64,
+            "heatmap": heatmap_base64,
+            "user_pred": user_pred
+        }
+    )

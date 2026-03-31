@@ -10,7 +10,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 app = FastAPI()
 app.include_router(model_ml.router)
-
+app.include_router(model_dl.router)
 @app.get("/root")
 def root():
     return {"m":"Hello World"}
@@ -105,13 +105,74 @@ async def pageML(request: Request):
 
 @app.get("/theory_dl")
 async def pageDL(request: Request):
-    # อ่านไฟล์ 
+
+    # ================= LOAD =================
     csv_path = os.path.join(BASE_DIR, "data", "dataset2.csv")
     df = pd.read_csv(csv_path)
-    # แปลง DataFrame เป็น HTML
-    table_html_before = df.to_html(classes="table table-striped", index=False)
-    
+
+    # ================= BEFORE =================
+    table_html_before = df.head(100).to_html(classes="table table-striped", index=False)
+
+    rows, cols = df.shape
+    summary_info = {
+        "rows": rows,
+        "columns": cols,
+        "total_values": rows * cols
+    }
+
+    dtype_summary = pd.DataFrame({
+        "column": df.columns,
+        "dtype": df.dtypes.astype(str)
+    })
+    table_html_dtype = dtype_summary.to_html(classes="table table-striped", index=False)
+
+    null_summary = pd.DataFrame({
+        "column": df.columns,
+        "null_count": df.isnull().sum(),
+        "has_null": df.isnull().any()
+    })
+    table_html_null = null_summary.to_html(classes="table table-striped", index=False)
+
+    # ================= CLEANING =================
+    df_clean = df.copy()
+
+    # 1. ลบ missing
+    df_clean = df_clean.dropna()
+
+    # 2. Encoding (categorical → numeric)
+    label_encoders = {}
+    categorical_cols = [
+        "job_title",
+        "education_level",
+        "industry",
+        "company_size",
+        "location",
+        "remote_work"
+    ]
+
+    for col in categorical_cols:
+        le = LabelEncoder()
+        df_clean[col] = le.fit_transform(df_clean[col])
+        label_encoders[col] = le
+
+
+    # ================= AFTER =================
+    table_html_after = df_clean.head(100).to_html(
+        classes="table table-success table-striped",
+        index=False
+    )
+
+    # ================= RETURN =================
     return templates.TemplateResponse(
-    request,"theory_dl.html", 
-    {"table_html_before": table_html_before})
+        request,
+        "theory_dl.html",
+        {
+            "table_html_before": table_html_before,
+            "table_html_after": table_html_after,
+            "table_html_null": table_html_null,
+            "table_html_dtype": table_html_dtype,
+            "summary_info": summary_info
+        }
+    )
+
 

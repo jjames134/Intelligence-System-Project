@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <title>DL Dashboard</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        body {
+            background: #eef2f7;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #6a11cb, #2575fc);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            border-radius: 15px;
+            border: none;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            transition: 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .metric {
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .left-title {
+            color: #6a11cb;
+        }
+
+        .right-title {
+            color: #2575fc;
+        }
+
+        .btn-custom {
+            background: linear-gradient(135deg, #6a11cb, #2575fc);
+            color: white;
+            border: none;
+        }
+
+        .btn-custom:hover {
+            opacity: 0.9;
+        }
+
+        .result-box {
+            font-size: 30px;
+            font-weight: bold;
+        }
+
+        img {
+            border-radius: 10px;
+            width: 100%;
+        }
+
+        .badge-high {
+            background: #28a745;
+        }
+
+        .badge-low {
+            background: #dc3545;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container mt-4">
+
+        <!-- HEADER -->
+        <div class="header">
+            <h1>🧠 Deep Learning Dashboard</h1>
+            <p>ANN Model • Salary Prediction System</p>
+        </div>
+
+        <div class="row">
+
+            <!-- LEFT PANEL -->
+            <div class="col-md-6">
+
+                <!-- CONFUSION -->
+                <div class="card p-3 mb-3">
+                    <h4 class="left-title">📌 Confusion Matrix (Values)</h4>
+                    <hr>
+                    <div class="row text-center">
+                        <div class="col text-success">TP<br><span class="metric">{{ tp or 0 }}</span></div>
+                        <div class="col text-primary">TN<br><span class="metric">{{ tn or 0 }}</span></div>
+                        <div class="col text-danger">FP<br><span class="metric">{{ fp or 0 }}</span></div>
+                        <div class="col text-warning">FN<br><span class="metric">{{ fn or 0 }}</span></div>
+                    </div>
+                </div>
+
+                <!-- METRICS -->
+                <div class="card p-3 mb-3">
+                    <h5 class="left-title">📊 Model Metrics</h5>
+                    <div class="row text-center">
+                        <div class="col">Accuracy<br><b>{{ accuracy or "-" }}</b></div>
+                        <div class="col">Precision<br><b>{{ precision or "-" }}</b></div>
+                        <div class="col">Recall<br><b>{{ recall or "-" }}</b></div>
+                        <div class="col">F1<br><b>{{ f1 or "-" }}</b></div>
+                    </div>
+
+                    <div class="text-center mt-2">
+                        <b>AUC: {{ auc or "-" }}</b>
+                    </div>
+                </div>
+
+        
+
+                <!-- ROC -->
+                <div class="card p-3 mb-3">
+                    <h5 class="left-title">📈 ROC Curve</h5>
+                    {% if roc %}
+                    <img src="data:image/png;base64,{{ roc }}">
+                    {% else %}
+                    <p class="text-center text-muted">No ROC Data</p>
+                    {% endif %}
+                </div>
+
+                <!-- HEATMAP -->
+                <div class="card p-3 mb-3">
+                    <h5 class="left-title">🔥 Confusion Matrix Heatmap</h5>
+                    {% if heatmap %}
+                    <img src="data:image/png;base64,{{ heatmap }}">
+                    {% else %}
+                    <p class="text-center text-muted">No Heatmap</p>
+                    {% endif %}
+                </div>
+
+            </div>
+
+            <!-- RIGHT PANEL -->
+            <div class="col-md-6">
+
+                <!-- PREDICT FORM -->
+                <div class="card p-3 mb-3">
+                    <h4 class="right-title">🧪 Salary Prediction</h4>
+                    <hr>
+
+                    <form action="/dl/predict" method="post">
+
+                        <input type="text" name="job_title" class="form-control mb-2" placeholder="Job Title" required>
+
+                        <input type="number" name="experience_years" class="form-control mb-2"
+                            placeholder="Experience Years" required>
+
+                        <input type="text" name="education_level" class="form-control mb-2"
+                            placeholder="Education Level" required>
+
+                        <input type="number" name="skills_count" class="form-control mb-2" placeholder="Skills Count"
+                            required>
+
+                        <input type="text" name="industry" class="form-control mb-2" placeholder="Industry" required>
+
+                        <input type="text" name="company_size" class="form-control mb-2" placeholder="Company Size"
+                            required>
+
+                        <input type="text" name="location" class="form-control mb-2" placeholder="Location" required>
+
+                        <input type="text" name="remote_work" class="form-control mb-2"
+                            placeholder="Remote Work (Yes/No)" required>
+
+                        <input type="number" name="certifications" class="form-control mb-2"
+                            placeholder="Certifications" required>
+
+                        <button type="submit" class="btn btn-custom w-100 mt-2">
+                            🔮 Predict Salary
+                        </button>
+                    </form>
+
+                    {% if prediction %}
+                    <hr>
+
+                    <div class="text-center result-box 
+                    {% if 'High' in prediction %}text-success{% else %}text-danger{% endif %}">
+                        {{ prediction }}
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- EXPLANATION -->
+                <div class="card p-3">
+                    <h5 class="right-title">📖 Model Explanation</h5>
+
+                    <p>
+                        โมเดลนี้ใช้ <b>Artificial Neural Network (ANN)</b>
+                        เพื่อทำนายว่าเงินเดือนอยู่ในระดับ <b>สูง / ต่ำ</b>
+                    </p>
+
+                    <ul>
+                        <li>📥 Input: job, experience, skills</li>
+                        <li>🧠 Hidden Layers: เรียนรู้ pattern</li>
+                        <li>📤 Output: Probability ของ High Salary</li>
+                    </ul>
+
+                    <hr>
+
+                    <ul>
+                        <li>Accuracy → ความแม่นยำ</li>
+                        <li>Precision → ทำนาย High แล้วถูก</li>
+                        <li>Recall → จับ High ได้ครบ</li>
+                        <li>F1 → สมดุล</li>
+                        <li>AUC → แยกคลาสเก่งแค่ไหน</li>
+                    </ul>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</body>
+
+</html>
