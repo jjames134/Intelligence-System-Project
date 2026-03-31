@@ -7,6 +7,9 @@ import seaborn as sns
 import io
 import base64
 
+# ตั้งค่าไม่ให้ Matplotlib พยายามเปิดหน้าต่าง GUI บน Server
+plt.switch_backend('Agg')
+
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import (
@@ -17,47 +20,45 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 
-# -------------------- CONFIG --------------------
+# -------------------- CONFIG & PATHS --------------------
 router = APIRouter(prefix="/ml", tags=["Machine Learning"])
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+
+# ค้นหา Path ให้แม่นยำ (app/model/model_ml.py -> app/)
+CURRENT_FILE_DIR = os.path.dirname(os.path.abspath(__file__))
+APP_DIR = os.path.dirname(CURRENT_FILE_DIR)
+
+templates = Jinja2Templates(directory=os.path.join(APP_DIR, "templates"))
 
 # -------------------- GLOBAL VARIABLES --------------------
-df_clean = None
 ensemble = None
 le_iso = None
 X_columns = None
 threshold_value = 0
-tp = tn = fp = fn = 0
-accuracy = precision = recall = f1 = auc = 0
-heatmap_base64 = roc_base64 = ""
-model_results = []
-cv_mean = cv_std = 0
+metrics_data = {} # เก็บค่า Metrics ทั้งหมดไว้ในที่เดียวเพื่อให้ง่ายต่อการส่ง Context
 
 # -------------------- INITIALIZE MODEL --------------------
 def init_model():
-    global df_clean, ensemble, le_iso, X_columns
-    global tp, tn, fp, fn
-    global accuracy, precision, recall, f1, auc
-    global heatmap_base64, roc_base64
-    global model_results, cv_mean, cv_std
-    global threshold_value
+    global ensemble, le_iso, X_columns, threshold_value, metrics_data
 
-    # Load dataset
-    path = os.path.join(BASE_DIR, "data", "dataset1.csv")
+    if ensemble is not None:
+        return
+
+    # ชี้ไปที่ Root/app/data/dataset1.csv
+    path = os.path.join(APP_DIR, "data", "dataset1.csv")
+    if not os.path.exists(path):
+        print(f"❌ ML Model Error: File not found at {path}")
+        return
+
     df = pd.read_csv(path)
 
     # -------------------- CLEANING --------------------
     df_clean = df.copy()
     df_clean = df_clean.drop(columns=["poverty_rate", "gini_index", "country"], errors="ignore")
-
     cols_to_check = ["gdp", "gdp_per_capita", "income_top1", "income_top10", "income_bottom50"]
     df_clean = df_clean.dropna(subset=cols_to_check)
-
     df_clean["year_class"] = df_clean["year"] - df_clean["year"].min()
     df_clean = df_clean.drop(columns=["year"], errors="ignore")
 
-    # Label Encoding
     le_iso = LabelEncoder()
     df_clean["iso_code"] = le_iso.fit_transform(df_clean["iso_code"].astype(str))
 
@@ -68,20 +69,18 @@ def init_model():
     buf = io.BytesIO()
     plt.savefig(buf, format="png")
     plt.close()
-    buf.seek(0)
-    heatmap_base64 = base64.b64encode(buf.read()).decode()
+    heatmap_base64 = base64.b64encode(buf.getvalue()).decode()
 
-    # -------------------- TARGET --------------------
+    # -------------------- TARGET & SPLIT --------------------
     threshold_value = df_clean["income_top10"].median()
     df_clean["target"] = (df_clean["income_top10"] > threshold_value).astype(int)
 
     X = df_clean.drop(columns=["income_top10","target"])
     y = df_clean["target"]
-
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     X_columns = X_train.columns.tolist()
 
-    # -------------------- MODELS --------------------
+    # -------------------- ENSEMBLE MODEL --------------------
     m1 = LogisticRegression(max_iter=1000)
     m2 = DecisionTreeClassifier()
     m3 = RandomForestClassifier()
@@ -92,68 +91,66 @@ def init_model():
     )
     ensemble.fit(X_train, y_train)
 
-    # -------------------- METRICS --------------------
+    # -------------------- METRICS & ROC --------------------
     y_pred = ensemble.predict(X_test)
-    tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
-    accuracy = accuracy_score(y_test, y_pred)
-    precision = precision_score(y_test, y_pred, zero_division=0)
-    recall = recall_score(y_test, y_pred, zero_division=0)
-    f1 = f1_score(y_test, y_pred, zero_division=0)
-
-    # -------------------- ROC --------------------
     y_prob = ensemble.predict_proba(X_test)[:,1]
-    auc = roc_auc_score(y_test, y_prob)
-    fpr, tpr, _ = roc_curve(y_test, y_prob)
+    tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
+
     plt.figure()
-    plt.plot(fpr, tpr, label=f"AUC={auc:.4f}")
+    fpr, tpr, _ = roc_curve(y_test, y_prob)
+    auc_val = roc_auc_score(y_test, y_prob)
+    plt.plot(fpr, tpr, label=f"AUC={auc_val:.4f}")
     plt.plot([0,1],[0,1],"--")
     plt.legend()
     buf = io.BytesIO()
     plt.savefig(buf, format="png")
     plt.close()
-    buf.seek(0)
-    roc_base64 = base64.b64encode(buf.read()).decode()
+    roc_base64 = base64.b64encode(buf.getvalue()).decode()
 
-    # -------------------- CROSS VALIDATION --------------------
+    # -------------------- CROSS VAL & COMPARISON --------------------
     cv = cross_val_score(ensemble, X, y, cv=5)
-    cv_mean = cv.mean()
-    cv_std = cv.std()
+    
+    model_comp = []
+    for name, m in {"Logistic": m1, "Decision Tree": m2, "Random Forest": m3}.items():
+        m.fit(X_train, y_train)
+        acc = accuracy_score(y_test, m.predict(X_test))
+        model_comp.append((name, round(acc, 4)))
 
-    # -------------------- MODEL COMPARISON --------------------
-    model_results.clear()
-    for name, model in {"Logistic": m1, "Decision Tree": m2, "Random Forest": m3}.items():
-        model.fit(X_train, y_train)
-        acc = accuracy_score(y_test, model.predict(X_test))
-        model_results.append((name, round(acc,4)))
+    # รวบรวมข้อมูลไว้ใน Dictionary เดียว
+    metrics_data = {
+        "tp": int(tp), "tn": int(tn), "fp": int(fp), "fn": int(fn),
+        "accuracy": round(accuracy_score(y_test, y_pred), 4),
+        "precision": round(precision_score(y_test, y_pred, zero_division=0), 4),
+        "recall": round(recall_score(y_test, y_pred, zero_division=0), 4),
+        "f1": round(f1_score(y_test, y_pred, zero_division=0), 4),
+        "auc": round(auc_val, 4),
+        "heatmap": heatmap_base64,
+        "roc": roc_base64,
+        "model_results": model_comp,
+        "cv_mean": round(cv.mean(), 4),
+        "cv_std": round(cv.std(), 4),
+        "threshold": round(threshold_value, 2)
+    }
 
-
-# Initialize when import
 init_model()
 
 # -------------------- ROUTES --------------------
+def get_ml_context(request: Request, extra_data=None):
+    ctx = {"request": request}
+    ctx.update(metrics_data)
+    if extra_data:
+        ctx.update(extra_data)
+    return ctx
+
 @router.get("/model")
-def model_page(request: Request):
+async def model_page(request: Request):
     return templates.TemplateResponse(
-        request,
-        "model_ml.html",
-        {
-            "tp": tp, "tn": tn, "fp": fp, "fn": fn,
-            "accuracy": round(accuracy,4),
-            "precision": round(precision,4),
-            "recall": round(recall,4),
-            "f1": round(f1,4),
-            "auc": round(auc,4),
-            "heatmap": heatmap_base64,
-            "roc": roc_base64,
-            "model_results": model_results,
-            "cv_mean": round(cv_mean,4),
-            "cv_std": round(cv_std,4),
-            "threshold": round(threshold_value,2)
-        }
+        name="model_ml.html", 
+        context=get_ml_context(request)
     )
 
 @router.post("/predict")
-def predict_user(
+async def predict_user(
     request: Request,
     population: float = Form(...),
     gdp: float = Form(...),
@@ -175,23 +172,12 @@ def predict_user(
     pred = ensemble.predict(df_input)[0]
     proba = ensemble.predict_proba(df_input)[0][1]
 
+    res = {
+        "user_pred": "High Inequality" if pred == 1 else "Low Inequality",
+        "probability": round(proba * 100, 2)
+    }
+    
     return templates.TemplateResponse(
-        request,
-        "model_ml.html",
-        {
-            "tp": tp, "tn": tn, "fp": fp, "fn": fn,
-            "accuracy": round(accuracy,4),
-            "precision": round(precision,4),
-            "recall": round(recall,4),
-            "f1": round(f1,4),
-            "auc": round(auc,4),
-            "heatmap": heatmap_base64,
-            "roc": roc_base64,
-            "model_results": model_results,
-            "cv_mean": round(cv_mean,4),
-            "cv_std": round(cv_std,4),
-            "threshold": round(threshold_value,2),
-            "user_pred": "High Inequality" if pred==1 else "Low Inequality",
-            "probability": round(proba*100,2)
-        }
+        name="model_ml.html", 
+        context=get_ml_context(request, res)
     )
