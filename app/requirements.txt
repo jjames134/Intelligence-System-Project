@@ -1,7 +1,0 @@
-fastapi
-uvicorn[standard]
-pandas
-scikit-learn
-jinja2
-python-multipart
-tensorflow
