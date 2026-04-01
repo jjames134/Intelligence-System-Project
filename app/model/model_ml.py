@@ -7,7 +7,7 @@ import seaborn as sns
 import io
 import base64
 
-# ตั้งค่าไม่ให้ Matplotlib พยายามเปิดหน้าต่าง GUI บน Server
+# ป้องกัน matplotlib พยายามเปิด GUI บน server
 plt.switch_backend('Agg')
 
 from sklearn.model_selection import train_test_split, cross_val_score
@@ -23,7 +23,6 @@ from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 # -------------------- CONFIG & PATHS --------------------
 router = APIRouter(prefix="/ml", tags=["Machine Learning"])
 
-# ค้นหา Path ให้แม่นยำ (app/model/model_ml.py -> app/)
 CURRENT_FILE_DIR = os.path.dirname(os.path.abspath(__file__))
 APP_DIR = os.path.dirname(CURRENT_FILE_DIR)
 
@@ -34,7 +33,7 @@ ensemble = None
 le_iso = None
 X_columns = None
 threshold_value = 0
-metrics_data = {} # เก็บค่า Metrics ทั้งหมดไว้ในที่เดียวเพื่อให้ง่ายต่อการส่ง Context
+metrics_data = {}
 
 # -------------------- INITIALIZE MODEL --------------------
 def init_model():
@@ -43,7 +42,6 @@ def init_model():
     if ensemble is not None:
         return
 
-    # ชี้ไปที่ Root/app/data/dataset1.csv
     path = os.path.join(APP_DIR, "data", "dataset1.csv")
     if not os.path.exists(path):
         print(f"❌ ML Model Error: File not found at {path}")
@@ -52,8 +50,7 @@ def init_model():
     df = pd.read_csv(path)
 
     # -------------------- CLEANING --------------------
-    df_clean = df.copy()
-    df_clean = df_clean.drop(columns=["poverty_rate", "gini_index", "country"], errors="ignore")
+    df_clean = df.drop(columns=["poverty_rate", "gini_index", "country"], errors="ignore")
     cols_to_check = ["gdp", "gdp_per_capita", "income_top1", "income_top10", "income_bottom50"]
     df_clean = df_clean.dropna(subset=cols_to_check)
     df_clean["year_class"] = df_clean["year"] - df_clean["year"].min()
@@ -81,7 +78,7 @@ def init_model():
     X_columns = X_train.columns.tolist()
 
     # -------------------- ENSEMBLE MODEL --------------------
-    m1 = LogisticRegression(max_iter=1000)
+    m1 = LogisticRegression(max_iter=2000)
     m2 = DecisionTreeClassifier()
     m3 = RandomForestClassifier()
 
@@ -109,15 +106,15 @@ def init_model():
 
     # -------------------- CROSS VAL & COMPARISON --------------------
     cv = cross_val_score(ensemble, X, y, cv=5)
-    
+
     model_comp = []
     for name, m in {"Logistic": m1, "Decision Tree": m2, "Random Forest": m3}.items():
         m.fit(X_train, y_train)
         acc = accuracy_score(y_test, m.predict(X_test))
         model_comp.append((name, round(acc, 4)))
 
-    # รวบรวมข้อมูลไว้ใน Dictionary เดียว
-    metrics_data = {
+    # -------------------- SAVE METRICS --------------------
+    metrics_data.update({
         "tp": int(tp), "tn": int(tn), "fp": int(fp), "fn": int(fn),
         "accuracy": round(accuracy_score(y_test, y_pred), 4),
         "precision": round(precision_score(y_test, y_pred, zero_division=0), 4),
@@ -130,22 +127,22 @@ def init_model():
         "cv_mean": round(cv.mean(), 4),
         "cv_std": round(cv.std(), 4),
         "threshold": round(threshold_value, 2)
-    }
+    })
 
-init_model()
-
-# -------------------- ROUTES --------------------
+# -------------------- HELPERS --------------------
 def get_ml_context(request: Request, extra_data=None):
-    ctx = {"request": request}
+    ctx = {}
     ctx.update(metrics_data)
     if extra_data:
         ctx.update(extra_data)
     return ctx
 
+# -------------------- ROUTES --------------------
 @router.get("/model")
 async def model_page(request: Request):
     return templates.TemplateResponse(
-        name="model_ml.html", 
+        request=request,
+        name="model_ml.html",
         context=get_ml_context(request)
     )
 
@@ -176,8 +173,9 @@ async def predict_user(
         "user_pred": "High Inequality" if pred == 1 else "Low Inequality",
         "probability": round(proba * 100, 2)
     }
-    
+
     return templates.TemplateResponse(
-        name="model_ml.html", 
+        request=request,
+        name="model_ml.html",
         context=get_ml_context(request, res)
     )

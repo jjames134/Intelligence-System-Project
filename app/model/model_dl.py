@@ -105,10 +105,8 @@ def init_model():
     cv_mean = round(cv_scores.mean(),4)
     cv_std = round(cv_scores.std(),4)
 
-init_model()
-
 # ================= CONTEXT =================
-def get_context(request: Request, prediction=None):
+def get_context(prediction=None):
     context = metrics_data.copy()
     context.update({
         "roc": roc_base64,
@@ -117,13 +115,16 @@ def get_context(request: Request, prediction=None):
         "cv_std": cv_std,
         "prediction": prediction
     })
-    context["request"] = request
     return context
 
 # ================= ROUTES =================
 @router.get("/model")
 def model_page(request: Request):
-    return templates.TemplateResponse("model_dl.html", get_context(request))
+    return templates.TemplateResponse(
+        request=request,
+        name="model_dl.html",
+        context=get_context()
+    )
 
 @router.post("/predict")
 def predict_user(
@@ -160,4 +161,8 @@ def predict_user(
         print(f"Prediction Error: {e}")
         prediction = "❌ เกิดข้อผิดพลาดในการประมวลผลข้อมูล"
 
-    return templates.TemplateResponse("model_dl.html", get_context(request, prediction))
+    return templates.TemplateResponse(
+        request=request,
+        name="model_dl.html",
+        context=get_context(prediction)
+    )
